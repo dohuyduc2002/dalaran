@@ -1,0 +1,50 @@
+{
+  "name": "dalaran",
+  "version": "0.2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dohuyduc2002/dalaran"
+  },
+  "main": "src/index.ts",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "fast-xml-parser": "^5.11.2",
+    "tar": "^7.5.22",
+    "zod": "^4.6.5"
+  },
+  "bin": {
+    "dalaran": "src/index.ts"
+  },
+  "bugs": {
+    "url": "https://github.com/dohuyduc2002/dalaran/issues"
+  },
+  "description": "Model Context Protocol server for Semantic Scholar and arXiv",
+  "engines": {
+    "bun": ">=1.1"
+  },
+  "files": [
+    "src"
+  ],
+  "homepage": "https://github.com/dohuyduc2002/dalaran",
+  "keywords": [
+    "mcp",
+    "semantic-scholar",
+    "arxiv",
+    "academic",
+    "papers",
+    "research"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build": "bun build src/index.ts --compile --outfile dist/dalaran"
+  },
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "typescript": "^7.0.2"
+  }
+}
