@@ -40,6 +40,7 @@
     "dev": "bun --watch src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "sync:venues": "bun scripts/sync-icore.ts",
     "build": "bun build src/index.ts --compile --outfile dist/dalaran"
   },
   "type": "module",

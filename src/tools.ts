@@ -25,15 +25,74 @@ const authorId = { type: "string", description: "Author ID" };
 export const TOOLS: Tool[] = [
   tool(
     "search_papers",
-    "Search academic papers by keyword. Optional filters: year, venue.",
+    "Search academic papers by keyword across Semantic Scholar, OpenAlex and arXiv. " +
+      "Filters: year; venue (names/aliases) or venue_tier/venue_area/venue_type to restrict to curated " +
+      "top ML/AI venues (see list_venues); institution (names or ROR ids) to restrict to papers with an " +
+      "author at that institution (see search_institutions). Venue filters skip arXiv; institution " +
+      "filters use OpenAlex only. The response lists skipped_sources and failed_sources.",
     {
       query: { type: "string", description: "Search query" },
       limit: limit(10, 100),
       fields,
       year: { type: "string", description: "Year filter, e.g. '2020-2023' or '2023'" },
-      venue: { type: "array", items: { type: "string" }, description: "Venue names to filter" },
+      venue: {
+        type: "array",
+        items: { type: "string" },
+        description: "Venue names or aliases, e.g. ['NeurIPS', 'ICML']. Unregistered names only filter Semantic Scholar.",
+      },
+      venue_tier: {
+        type: "number",
+        enum: [1, 2],
+        description: "Restrict to curated venues with tier <= this (1 = flagship, 2 = flagship + strong). Unions with `venue`.",
+      },
+      venue_area: {
+        type: "string",
+        description: "Restrict to curated venues in this area: ml, ai, cv, nlp, data-mining, ir, robotics, speech, theory.",
+      },
+      venue_type: { type: "string", enum: ["conference", "journal"], description: "Restrict curated venues by type." },
+      institution: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Institutions or companies as ROR ids (https://ror.org/00971b260) or names. Names must match " +
+          "confidently, otherwise the call fails with candidates; use search_institutions to get the id.",
+      },
     },
     ["query"],
+  ),
+  tool(
+    "list_venues",
+    "List the curated top-tier ML/AI conferences and journals that search_papers can filter by, " +
+      "with aliases, tier, type and areas.",
+    {
+      tier: { type: "number", enum: [1, 2], description: "Include venues with tier <= this" },
+      area: { type: "string", description: "ml, ai, cv, nlp, data-mining, ir, robotics, speech, theory" },
+      type: { type: "string", enum: ["conference", "journal"] },
+    },
+    [],
+  ),
+  tool(
+    "search_institutions",
+    "Search the Research Organization Registry (ROR) for universities, companies, labs and other " +
+      "research organizations. Returns ROR ids, aliases, acronyms, location, and parent/child " +
+      "relations. Pass ROR ids to search_papers `institution`.",
+    {
+      query: { type: "string", description: "Organization name, acronym or alias" },
+      types: {
+        type: "array",
+        items: { type: "string" },
+        description: "ROR types: education, company, nonprofit, government, healthcare, facility, funder, archive, other",
+      },
+      country: { type: "string", description: "ISO 3166-1 alpha-2 country code, e.g. US" },
+      limit: limit(10, 20),
+    },
+    ["query"],
+  ),
+  tool(
+    "get_institution",
+    "Get one organization from ROR by id, including its parent and child organizations.",
+    { ror_id: { type: "string", description: "ROR id or URL, e.g. https://ror.org/00971b260" } },
+    ["ror_id"],
   ),
   tool(
     "get_paper_details",

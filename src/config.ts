@@ -32,3 +32,7 @@ export const cacheTtlSeconds = Math.max(
   1,
   envInt("DALARAN_CACHE_TTL_SECONDS", CACHE_TTL_SECONDS_DEFAULT),
 );
+export const openalexApiKey = process.env.OPENALEX_API_KEY;
+export const enableOpenalex = envBool("DALARAN_ENABLE_OPENALEX", true);
+/** Max total seconds a Semantic Scholar call may spend sleeping on 429 retries. */
+export const s2MaxRetryWaitSeconds = Math.max(0, envInt("DALARAN_S2_MAX_RETRY_WAIT_SECONDS", 10));
