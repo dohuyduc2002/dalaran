@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 // Refresh src/venues.json from the ICORE conference ranking export.
-//   bun scripts/sync-icore.ts [--csv path] [--resolve-openalex] [--dry-run]
+//   bun scripts/sync-icore.ts [--csv path] [--for 4602,4611] [--resolve-openalex] [--dry-run]
+// --for restricts seeding to ICORE field codes (default: 4602,4603,4605,4611).
 // Mark an entry `"tierSource": "manual"` in venues.json to protect it from this script.
 import fs from "node:fs";
 import path from "node:path";
-import { mergeIcore, parseIcore, pickSources, serializeRegistry } from "./icore";
+import { mergeIcore, parseFors, parseIcore, pickSources, serializeRegistry } from "./icore";
 import type { Venue } from "../src/venues";
 
 const ICORE_URL =
@@ -14,6 +15,7 @@ const REGISTRY = path.join(import.meta.dir, "../src/venues.json");
 const args = process.argv.slice(2);
 const flag = (n: string) => args.includes(n);
 const csvPath = args[args.indexOf("--csv") + 1];
+const fors = args.includes("--for") ? parseFors(args[args.indexOf("--for") + 1] ?? "") : undefined;
 
 const csv = csvPath && args.includes("--csv")
   ? fs.readFileSync(csvPath, "utf8")
@@ -24,7 +26,7 @@ const csv = csvPath && args.includes("--csv")
     })();
 
 const existing = JSON.parse(fs.readFileSync(REGISTRY, "utf8")) as Venue[];
-const { venues, report } = mergeIcore(existing, parseIcore(csv));
+const { venues, report } = mergeIcore(existing, parseIcore(csv), fors);
 
 if (flag("--resolve-openalex")) {
   const key = process.env.OPENALEX_API_KEY;

@@ -1,6 +1,26 @@
 import type { Venue } from "../src/venues";
 
-/** ICORE field-of-research codes we treat as ML/AI-relevant, and the registry area each maps to. */
+/** ICORE Fields of Research (https://portal.core.edu.au/conf-ranks/ "Fields of Research codes"). */
+export const ICORE_FORS: Record<string, { label: string; name: string }> = {
+  "4601": { label: "", name: "Applied computing" },
+  "4602": { label: "AI", name: "Artificial intelligence (excluding ML)" },
+  "4603": { label: "MM", name: "Computer vision and multimedia computation" },
+  "4604": { label: "Sec", name: "Cybersecurity and privacy" },
+  "4605": { label: "Data", name: "Data management and data science" },
+  "4606": { label: "DS", name: "Distributed computing and systems software" },
+  "4607": { label: "", name: "Graphics, augmented reality and games" },
+  "4608": { label: "HC", name: "Human-centred computing" },
+  "4611": { label: "ML", name: "Machine learning" },
+  "4612": { label: "SW", name: "Software and its engineering" },
+  "4613": { label: "Theory", name: "Theory of computation" },
+  CSE: { label: "CSE", name: "Computer Systems Engineering" },
+};
+
+/**
+ * Codes seeded by default, and the registry area each maps to. ICORE has no NLP, robotics, IR or
+ * speech code (they sit under 4602), so those areas are only set by hand. Note 4603 includes
+ * multimedia and 4605 includes databases, so both pull in venues beyond vision and data mining.
+ */
 export const FOR_AREAS: Record<string, string> = {
   "4602": "ai",
   "4603": "cv",
@@ -58,9 +78,24 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 const tierOf = (rank: string): 1 | 2 | undefined => (rank === "A*" ? 1 : rank === "A" ? 2 : undefined);
 
-/** Rows that belong in the registry: rank A* or A with at least one ML/AI-relevant field code. */
-export function selectRows(rows: IcoreRow[]): IcoreRow[] {
-  return rows.filter((r) => r.acronym && tierOf(r.rank) && r.fors.some((f) => f in FOR_AREAS));
+/** Throws on codes ICORE does not define, so a typo cannot silently select nothing. */
+export function parseFors(arg: string): string[] {
+  const codes = arg.split(",").map((c) => c.trim()).filter(Boolean);
+  const bad = codes.filter((c) => !(c in ICORE_FORS));
+  if (!codes.length || bad.length) {
+    throw new Error(
+      `Unknown ICORE field code(s): ${bad.join(", ") || "(none given)"}. Known: ${Object.keys(ICORE_FORS).join(", ")}`,
+    );
+  }
+  return codes;
+}
+
+/** Area for a code: the mapped area, else the lower-cased ICORE label (e.g. "ds"), else the code. */
+const areaOf = (code: string) => FOR_AREAS[code] ?? (ICORE_FORS[code]?.label.toLowerCase() || code);
+
+/** Rows that belong in the registry: rank A* or A with at least one selected field code. */
+export function selectRows(rows: IcoreRow[], fors: string[] = Object.keys(FOR_AREAS)): IcoreRow[] {
+  return rows.filter((r) => r.acronym && tierOf(r.rank) && r.fors.some((f) => fors.includes(f)));
 }
 
 export interface SyncReport {
@@ -77,9 +112,16 @@ export interface SyncReport {
  *  - Managed conferences that dropped below A (or left the selected fields) are removed.
  *  - New rows are appended with no OpenAlex sources (resolve separately).
  */
-export function mergeIcore(existing: Venue[], rows: IcoreRow[]): { venues: Venue[]; report: SyncReport } {
+export function mergeIcore(
+  existing: Venue[],
+  rows: IcoreRow[],
+  fors?: string[],
+): { venues: Venue[]; report: SyncReport } {
   const report: SyncReport = { updated: [], added: [], removed: [], keptManual: [] };
-  const wanted = new Map(selectRows(rows).map((r) => [slug(r.acronym), r]));
+  const selected = fors ?? Object.keys(FOR_AREAS);
+  // Areas come only from the selected field codes, so secondary codes never add labels.
+  const areasOf = (r: IcoreRow) => r.fors.filter((f) => selected.includes(f)).map(areaOf);
+  const wanted = new Map(selectRows(rows, selected).map((r) => [slug(r.acronym), r]));
   const venues: Venue[] = [];
   const seen = new Set<string>();
 
@@ -96,7 +138,7 @@ export function mergeIcore(existing: Venue[], rows: IcoreRow[]): { venues: Venue
       continue;
     }
     seen.add(slug(row.acronym));
-    const areas = [...new Set([...v.areas, ...row.fors.map((f) => FOR_AREAS[f]).filter(Boolean)])];
+    const areas = [...new Set([...v.areas, ...areasOf(row)])];
     const aliases = [...new Set([...v.aliases, row.title])].filter((a) => norm(a) !== norm(v.name));
     const next: Venue = { ...v, aliases, areas, tier: tierOf(row.rank)!, icore: row.rank, tierSource: "icore" };
     if (JSON.stringify(next) !== JSON.stringify(v)) report.updated.push(v.name);
@@ -113,7 +155,7 @@ export function mergeIcore(existing: Venue[], rows: IcoreRow[]): { venues: Venue
       name: r.acronym,
       aliases: norm(r.title) === norm(r.acronym) ? [] : [r.title],
       type: "conference",
-      areas: [...new Set(r.fors.map((f) => FOR_AREAS[f]).filter(Boolean))],
+      areas: [...new Set(areasOf(r))],
       tier: tierOf(r.rank)!,
       openalexSources: [],
       icore: r.rank,

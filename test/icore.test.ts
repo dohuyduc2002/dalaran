@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mergeIcore, parseCsv, parseIcore, pickSources, selectRows, serializeRegistry } from "../scripts/icore";
+import { mergeIcore, parseCsv, parseFors, parseIcore, pickSources, selectRows, serializeRegistry } from "../scripts/icore";
 import type { Venue } from "../src/venues";
 
 // Shape of the real ICORE export: no header, id,title,acronym,source,rank,dblp,for1,for2,for3.
@@ -98,4 +98,19 @@ test("pickSources rejects acronym collisions seen in the first live run", () => 
       c("S2", "International Conference on Database Theory (ICDT)"),
     ]),
   ).toEqual(["S2"]);
+});
+
+test("parseFors validates codes against the ICORE table", () => {
+  expect(parseFors("4602, 4611")).toEqual(["4602", "4611"]);
+  expect(parseFors("CSE")).toEqual(["CSE"]);
+  expect(() => parseFors("4699")).toThrow("4699");
+  expect(() => parseFors("")).toThrow();
+});
+
+test("selectRows and mergeIcore honour a narrowed field list", () => {
+  const rows = parseIcore(csv);
+  expect(selectRows(rows, ["4611"]).map((r) => r.acronym)).toEqual(["ICML", "QQ"]);
+  expect(selectRows(rows, ["4606"]).map((r) => r.acronym)).toEqual(["OSDI"]);
+  const { venues } = mergeIcore([], rows, ["4606"]);
+  expect(venues[0]).toMatchObject({ id: "osdi", areas: ["ds"] }); // unmapped code => ICORE label
 });
