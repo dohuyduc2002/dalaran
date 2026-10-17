@@ -21,6 +21,7 @@ function mergeAuthorLists(base: Json[], incoming: Json[]): Json[] {
     const prev = seen.get(key);
     if (prev) {
       // Same author from another channel: keep the first record but adopt affiliations.
+      // Limitation: affiliation lists are adopted whole, never unioned across channels.
       if (isEmpty(prev.institutions) && !isEmpty(a.institutions)) prev.institutions = a.institutions;
       continue;
     }

@@ -19,6 +19,7 @@ import { logger } from "./log.js";
 import { mergeParallelSearchResults } from "./merge.js";
 import { OpenAlexClient } from "./openalex.js";
 import { planSearch } from "./plan.js";
+import { MAX_INSTITUTIONS, optionalString, stringList, venueTier } from "./args.js";
 import { looksLikeRorId, normalizeRorId, RorClient } from "./ror.js";
 import { SemanticScholarClient, type Json } from "./semanticScholar.js";
 import { TOOLS } from "./tools.js";
@@ -42,38 +43,40 @@ function required<T>(args: Json, key: string): T {
 
 /** Resolve institution names / ROR ids to canonical ROR ids. Ambiguous names are rejected. */
 async function resolveInstitutions(inputs: string[]): Promise<{ rorIds: string[]; resolved: Json[] }> {
-  const rorIds: string[] = [];
-  const resolved: Json[] = [];
-  for (const raw of inputs) {
-    if (looksLikeRorId(raw)) {
-      const id = normalizeRorId(raw);
-      rorIds.push(id);
-      resolved.push({ input: raw, ror_id: id });
-      continue;
-    }
-    const { chosen, candidates } = await ror.resolveAffiliation(raw);
-    if (!chosen) {
-      const hint = candidates.map((c) => `${c.name} (${c.ror_id})`).join("; ") || "no candidates";
-      throw new Error(
-        `Could not confidently resolve institution ${JSON.stringify(raw)} to one ROR id. ` +
-          `Candidates: ${hint}. Pass an explicit ROR id (see search_institutions).`,
-      );
-    }
-    rorIds.push(chosen.ror_id);
-    resolved.push({ input: raw, ror_id: chosen.ror_id, name: chosen.name });
-  }
-  return { rorIds: [...new Set(rorIds)], resolved };
+  // Lookups are independent, so run them concurrently (capped by MAX_INSTITUTIONS upstream).
+  const resolved = await Promise.all(
+    inputs.map(async (raw): Promise<Json> => {
+      if (looksLikeRorId(raw)) return { input: raw, ror_id: normalizeRorId(raw) };
+      const { chosen, candidates } = await ror.resolveAffiliation(raw);
+      if (!chosen) {
+        const hint = candidates.map((c) => `${c.name} (${c.ror_id})`).join("; ") || "no candidates";
+        throw new Error(
+          `Could not confidently resolve institution ${JSON.stringify(raw)} to one ROR id. ` +
+            `Candidates: ${hint}. Pass an explicit ROR id (see search_institutions).`,
+        );
+      }
+      return { input: raw, ror_id: chosen.ror_id, name: chosen.name };
+    }),
+  );
+  return { rorIds: [...new Set(resolved.map((r) => r.ror_id as string))], resolved };
 }
 
 async function searchPapers(args: Json): Promise<Json> {
   const limit = Math.min(Math.max(1, Number(args.limit ?? 10)), 100);
   const query = required<string>(args, "query");
-  const year: string | undefined = args.year;
+  const year = optionalString(args.year, "year");
+  const venue = stringList(args.venue, "venue");
 
-  const { rorIds, resolved } = await resolveInstitutions(args.institution ?? []);
+  const { rorIds, resolved } = await resolveInstitutions(
+    stringList(args.institution, "institution", MAX_INSTITUTIONS) ?? [],
+  );
   const plan = planSearch({
-    venue: args.venue,
-    selector: { tier: args.venue_tier, area: args.venue_area, type: args.venue_type },
+    venue,
+    selector: {
+      tier: venueTier(args.venue_tier),
+      area: optionalString(args.venue_area, "venue_area"),
+      type: optionalString(args.venue_type, "venue_type"),
+    },
     rorIds,
     enabled: { semanticScholar: enableSemanticScholar, openalex: enableOpenalex, arxiv: enableArxiv },
   });
@@ -141,7 +144,11 @@ async function callTool(name: string, args: Json): Promise<Json> {
       return s2.batchGetPapers(required(args, "paper_ids"), args.fields);
     case "list_venues":
       return {
-        data: listVenues({ tier: args.tier, area: args.area, type: args.type }).map(
+        data: listVenues({
+          tier: venueTier(args.tier),
+          area: optionalString(args.area, "area"),
+          type: optionalString(args.type, "type"),
+        }).map(
           ({ openalexSources: _omit, ...v }) => v,
         ),
       };
@@ -185,7 +192,8 @@ export function createServer(): Server {
         }
       }
       const result = await callTool(name, args);
-      // Never pin a degraded (partial-failure) result in the cache for the full TTL.
+      // Never pin a degraded (partial-failure) result in the cache for the full TTL. Results with
+      // skipped_sources are cached on purpose: skipping is a deterministic function of the filters.
       if (key && !result.failed_sources) await cache.set(key, result, cacheTtlSeconds);
       return asContent(result);
     } catch (e) {

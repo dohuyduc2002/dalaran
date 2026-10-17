@@ -64,7 +64,26 @@ export function resolveVenues(names: string[] | undefined, selector: VenueSelect
   return { venues: [...out.values()], unknownNames };
 }
 
-/** Names Semantic Scholar's `venue` filter should receive. */
-export function s2VenueNames({ venues, unknownNames }: ResolvedVenues): string[] {
-  return [...venues.flatMap((v) => [v.name, ...v.aliases]), ...unknownNames];
+/**
+ * Names for Semantic Scholar's comma-joined `venue` param, bounded so a broad selector
+ * (e.g. venue_tier 2) cannot build a URL the API rejects. Canonical names go first for every
+ * venue, then aliases while there is room. `truncated` lists venues whose aliases were cut.
+ */
+export function s2VenueNames(
+  { venues, unknownNames }: ResolvedVenues,
+  maxChars = 1500,
+): { names: string[]; truncated: boolean } {
+  const names: string[] = [];
+  let used = 0;
+  let truncated = false;
+  const add = (n: string) => {
+    if (names.includes(n)) return;
+    if (used + n.length + 1 > maxChars) return void (truncated = true);
+    names.push(n);
+    used += n.length + 1;
+  };
+  for (const n of unknownNames) add(n);
+  for (const v of venues) add(v.name);
+  for (const v of venues) for (const a of v.aliases) add(a);
+  return { names, truncated };
 }

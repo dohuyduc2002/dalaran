@@ -49,7 +49,12 @@ export function planSearch(input: SearchPlanInput): SearchPlan {
 
   if (enabled.semanticScholar) {
     if (institutionFilter) skip("semantic_scholar", "no ROR institution filter");
-    else plan.semanticScholar = venueFilter ? { venues: s2VenueNames(resolved) } : {};
+    else if (!venueFilter) plan.semanticScholar = {};
+    else {
+      const { names, truncated } = s2VenueNames(resolved);
+      plan.semanticScholar = { venues: names };
+      if (truncated) plan.notes.push("Semantic Scholar venue filter was shortened to fit the request size; some aliases were dropped");
+    }
   }
 
   if (enabled.openalex) {

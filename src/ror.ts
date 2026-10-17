@@ -1,7 +1,9 @@
 import type { Json } from "./semanticScholar.js";
 
 const ROR_API = "https://api.ror.org/v2/organizations";
-const ROR_ID_RE = /(0[a-hj-km-np-tv-z0-9]{6}[0-9]{2})\b/i;
+const ROR_ID = "0[a-hj-km-np-tv-z0-9]{6}[0-9]{2}";
+// Optional https://ror.org/ or ror.org/ prefix, then exactly the id: surrounding text is rejected.
+const ROR_ID_RE = new RegExp(`^(?:https?://)?(?:ror\\.org/)?(${ROR_ID})/?$`, "i");
 
 /** Accept `00971b260`, `ror.org/00971b260`, or the full URL; return the canonical URL. */
 export function normalizeRorId(raw: string): string {
@@ -11,8 +13,7 @@ export function normalizeRorId(raw: string): string {
 }
 
 /** True for ROR ids and ror.org URLs, false for free-text names. */
-export const looksLikeRorId = (raw: string): boolean =>
-  /ror\.org\//i.test(raw) || new RegExp(`^${ROR_ID_RE.source}$`, "i").test(raw.trim());
+export const looksLikeRorId = (raw: string): boolean => ROR_ID_RE.test((raw ?? "").trim());
 
 const nameOfType = (names: Json[], type: string) =>
   names.filter((n) => n.types?.includes(type)).map((n) => n.value as string);

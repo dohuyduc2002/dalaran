@@ -34,8 +34,9 @@ test("resolveVenues unions names with selector and reports unknown names", () =>
   expect(r.venues.map((v) => v.id)).toContain("icml");
   expect(r.venues.map((v) => v.id)).toContain("cvpr");
   expect(r.unknownNames).toEqual(["Some Workshop"]);
-  expect(s2VenueNames(r)).toContain("Some Workshop");
-  expect(s2VenueNames(r)).toContain("International Conference on Machine Learning");
+  const { names } = s2VenueNames(r);
+  expect(names).toContain("Some Workshop");
+  expect(names).toContain("International Conference on Machine Learning");
 });
 
 test("plan without filters queries every enabled channel", () => {
