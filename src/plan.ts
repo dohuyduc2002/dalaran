@@ -12,6 +12,8 @@ export interface SearchPlan {
   openalex?: { sourceIds?: string[]; rorIds?: string[] };
   arxiv: boolean;
   skipped: { source: string; reason: string }[];
+  /** Caveats where a channel still runs but cannot cover every requested venue. */
+  notes: string[];
   venuesApplied: string[];
 }
 
@@ -35,6 +37,7 @@ export function planSearch(input: SearchPlanInput): SearchPlan {
   const plan: SearchPlan = {
     arxiv: false,
     skipped: [],
+    notes: [],
     venuesApplied: [...resolved.venues.map((v) => v.name), ...resolved.unknownNames],
   };
   const skip = (source: string, reason: string) => plan.skipped.push({ source, reason });
@@ -51,12 +54,21 @@ export function planSearch(input: SearchPlanInput): SearchPlan {
 
   if (enabled.openalex) {
     const sourceIds = resolved.venues.flatMap((v) => v.openalexSources);
-    if (venueFilter && !sourceIds.length) skip("openalex", "venue not in registry (no OpenAlex source id)");
-    else
+    const uncovered = [
+      ...resolved.venues.filter((v) => !v.openalexSources.length).map((v) => v.name),
+      ...resolved.unknownNames,
+    ];
+    if (venueFilter && !sourceIds.length) {
+      skip("openalex", `no OpenAlex source id for: ${uncovered.join(", ")}`);
+    } else {
       plan.openalex = {
         sourceIds: venueFilter ? sourceIds : undefined,
         rorIds: institutionFilter ? rorIds : undefined,
       };
+      if (venueFilter && uncovered.length) {
+        plan.notes.push(`OpenAlex results exclude venues without a source id: ${uncovered.join(", ")}`);
+      }
+    }
   }
   return plan;
 }

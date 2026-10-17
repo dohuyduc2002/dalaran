@@ -116,6 +116,7 @@ async function searchPapers(args: Json): Promise<Json> {
   if (plan.venuesApplied.length) result.venues_applied = plan.venuesApplied;
   if (resolved.length) result.resolved_institutions = resolved;
   if (plan.skipped.length) result.skipped_sources = plan.skipped;
+  if (plan.notes.length) result.notes = plan.notes;
   if (failed.length) result.failed_sources = failed;
   return result;
 }

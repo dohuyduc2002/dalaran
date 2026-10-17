@@ -7,7 +7,8 @@ const all = { semanticScholar: true, openalex: true, arxiv: true };
 test("registry ids and OpenAlex sources are unique and well-formed", () => {
   expect(new Set(VENUES.map((v) => v.id)).size).toBe(VENUES.length);
   for (const v of VENUES) {
-    expect(v.openalexSources.length).toBeGreaterThan(0);
+    // ICORE-derived venues may lack OpenAlex ids; they then rely on Semantic Scholar name filters.
+    if (v.type === "journal" || v.tierSource === "manual") expect(v.openalexSources.length).toBeGreaterThan(0);
     for (const s of v.openalexSources) expect(s).toMatch(/^S\d+$/);
   }
 });
@@ -20,9 +21,10 @@ test("findVenue matches id, name, and alias ignoring case/punctuation", () => {
 });
 
 test("listVenues filters by tier, area, and type", () => {
-  expect(listVenues({ tier: 1, area: "nlp" }).map((v) => v.id).sort()).toEqual(
-    ["acl", "emnlp", "naacl", "tacl"],
-  );
+  const nlp1 = listVenues({ tier: 1, area: "nlp" }).map((v) => v.id);
+  expect(nlp1).toEqual(expect.arrayContaining(["acl", "emnlp", "tacl"]));
+  expect(nlp1.every((id) => findVenue(id)!.tier === 1 && findVenue(id)!.areas.includes("nlp"))).toBe(true);
+  expect(listVenues({ tier: 2, area: "nlp" }).length).toBeGreaterThan(nlp1.length);
   expect(listVenues({ type: "journal" }).every((v) => v.type === "journal")).toBe(true);
   expect(listVenues({ tier: 1 }).every((v) => v.tier === 1)).toBe(true);
 });
@@ -79,4 +81,21 @@ test("selector matching nothing is an error, not an unfiltered search", () => {
 test("a disabled channel is never planned", () => {
   const p = planSearch({ selector: {}, rorIds: [], enabled: { ...all, openalex: false } });
   expect(p.openalex).toBeUndefined();
+});
+
+test("a registered venue without an OpenAlex id is reported, not silently dropped", () => {
+  const noIds = VENUES.find((v) => v.type === "conference" && !v.openalexSources.length)!;
+  const alone = planSearch({ venue: [noIds.name], selector: {}, rorIds: [], enabled: all });
+  expect(alone.openalex).toBeUndefined();
+  expect(alone.skipped.find((s) => s.source === "openalex")?.reason).toContain(noIds.name);
+
+  const mixed = planSearch({ venue: [noIds.name, "NeurIPS"], selector: {}, rorIds: [], enabled: all });
+  expect(mixed.openalex?.sourceIds).toEqual(["S4363606243"]);
+  expect(mixed.notes[0]).toContain(noIds.name);
+});
+
+test("ICORE-derived tiers match ICORE ranks", () => {
+  for (const v of VENUES.filter((x) => x.tierSource === "icore")) {
+    expect(v.tier).toBe(v.icore === "A*" ? 1 : 2);
+  }
 });

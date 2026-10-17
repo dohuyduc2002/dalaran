@@ -10,6 +10,10 @@ export interface Venue {
   tier: 1 | 2;
   /** OpenAlex source ids (`S...`). One venue can span several (OpenAlex splits them). */
   openalexSources: string[];
+  /** ICORE rank this tier was derived from, when `tierSource` is "icore". */
+  icore?: string;
+  /** "manual" entries are never overwritten by scripts/sync-icore.ts. Journals are always manual. */
+  tierSource?: "icore" | "manual";
 }
 
 export const VENUES = registry as Venue[];
