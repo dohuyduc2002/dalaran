@@ -12,15 +12,21 @@ const isEmpty = (v: unknown): boolean =>
 
 function mergeAuthorLists(base: Json[], incoming: Json[]): Json[] {
   const merged: Json[] = [];
-  const seen = new Set<string>();
+  const seen = new Map<string, Json>();
   for (const a of [...(base ?? []), ...(incoming ?? [])]) {
     if (!a || typeof a !== "object") continue;
     const name = String(a.name ?? "").trim();
     if (!name) continue;
     const key = name.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(a);
+    const prev = seen.get(key);
+    if (prev) {
+      // Same author from another channel: keep the first record but adopt affiliations.
+      if (isEmpty(prev.institutions) && !isEmpty(a.institutions)) prev.institutions = a.institutions;
+      continue;
+    }
+    const copy = { ...a };
+    seen.set(key, copy);
+    merged.push(copy);
   }
   return merged;
 }
@@ -64,8 +70,9 @@ function mergePaperByTitle(existing: Json, incoming: Json, sourceName: string): 
 
 /** Merge multi-source results by normalized title key. */
 export function mergeParallelSearchResults(sourceResults: Record<string, Json[]>, limit: number) {
-  // Semantic Scholar first to preserve richer citation metadata on duplicates.
-  const priority = ["semantic_scholar", "arxiv"];
+  // Semantic Scholar first to preserve richer citation metadata on duplicates;
+  // OpenAlex next since it carries institution (ROR) data arXiv lacks.
+  const priority = ["semantic_scholar", "openalex", "arxiv"];
   const byTitle = new Map<string, Json>();
   for (const source of priority) {
     for (const paper of sourceResults[source] ?? []) {

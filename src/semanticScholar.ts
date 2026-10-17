@@ -22,7 +22,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export class SemanticScholarClient {
   private headers: Record<string, string> = {};
 
-  constructor(apiKey?: string) {
+  /** Total seconds one call may spend sleeping on 429s before giving up. */
+  constructor(
+    apiKey?: string,
+    private readonly maxRetryWaitSeconds = Infinity,
+  ) {
     if (apiKey) this.headers["x-api-key"] = apiKey;
   }
 
@@ -38,6 +42,7 @@ export class SemanticScholarClient {
     const headers: Record<string, string> = { ...this.headers };
     if (body !== undefined) headers["content-type"] = "application/json";
 
+    let waited = 0;
     for (let attempt = 0; ; attempt++) {
       const res = await fetch(url, {
         method,
@@ -49,6 +54,13 @@ export class SemanticScholarClient {
         let delay = baseDelay * 2 ** attempt;
         const retryAfter = res.headers.get("Retry-After");
         if (retryAfter && /^\d+$/.test(retryAfter)) delay = Math.max(delay, Number(retryAfter));
+        if (waited + delay > this.maxRetryWaitSeconds) {
+          throw new Error(
+            `Semantic Scholar rate limited (429); gave up after ${waited}s of retries` +
+              " (set SEMANTIC_SCHOLAR_API_KEY for higher limits)",
+          );
+        }
+        waited += delay;
         logger.warn(
           `Rate limited (429), retrying in ${delay.toFixed(1)}s (${attempt + 1}/${MAX_429_RETRIES})`,
         );

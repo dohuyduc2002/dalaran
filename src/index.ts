@@ -6,13 +6,16 @@ import { createServer, settings } from "./server.js";
 async function main(): Promise<void> {
   logger.info("Starting Dalaran MCP Server...");
   logger.info(
-    `Search channels: Semantic Scholar=${settings.enableSemanticScholar}, arXiv=${settings.enableArxiv}`,
+    `Search channels: Semantic Scholar=${settings.enableSemanticScholar}, OpenAlex=${settings.enableOpenalex}, arXiv=${settings.enableArxiv}`,
   );
   logger.info(
     `Local cache enabled: dir=${settings.cacheDir}, ttl_seconds=${settings.cacheTtlSeconds}`,
   );
   if (settings.apiKey) logger.info("Semantic Scholar API key detected");
   else logger.warn("No Semantic Scholar API key; using public rate limits");
+  if (settings.enableOpenalex && !settings.openalexApiKey) {
+    logger.warn("No OPENALEX_API_KEY; unauthenticated OpenAlex calls share a small per-IP daily budget");
+  }
 
   await createServer().connect(new StdioServerTransport());
 }
